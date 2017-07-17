@@ -1,10 +1,12 @@
 import csv
 import cv2
 import numpy as np
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.models import load_model
 import sklearn
 from sklearn.model_selection import train_test_split
 from matplotlib import pyplot as plt
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+import os.path
 import drive_networks
 
 # Training parameters
@@ -102,17 +104,25 @@ validation_generator = generator(validation_samples, batch_size=batch_size)
 # Stop training if validation accuracy decreases after 'patience' epochs
 early_stopping = EarlyStopping(monitor='val_acc', patience=3)
 # Save best model based on validation accuracy
-model_checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_acc', save_best_only=True, save_weights_only=False, mode='auto')
+model_checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_acc', save_best_only=True, save_weights_only=True, mode='auto')
 
-# Import driving network model
-model = drive_networks.alvinn()
+# Create driving network model
+if os.path.isfile(checkpoint_file):
+    # Load existing pre-trained network if it exists
+    model = load_model(checkpoint_file)
+    print("Using pre-trained network")
+else:
+    # Load a new instance of the network
+    model = drive_networks.alvinn()
+    print("Using new network")
 
 # Train model
-#model.load_model(checkpoint_file)
-model.compile(loss='mse', optimizer='adam')
-train_history=model.fit_generator(train_generator, steps_per_epoch=len(train_samples)/batch_size, validation_data=validation_generator,
-                    validation_steps=len(validation_samples)/batch_size, nb_epoch=3)
-model.save('model.h5')
+steps_per_epoch  = np.math.ceil(len(train_samples)/batch_size)
+validation_steps = np.math.ceil(len(validation_samples)/batch_size)
+model.compile(loss='mse', optimizer='adam',metrics=['accuracy'])
+train_history=model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch, validation_data=validation_generator,
+                    validation_steps=validation_steps, epochs=2, callbacks=[model_checkpoint, early_stopping])
+#model.save('model.h5')
 print("Model saved.")
 plot_history(train_history)
 

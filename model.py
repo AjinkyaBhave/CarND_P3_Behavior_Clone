@@ -60,10 +60,11 @@ def analyse_data(samples, num_images=20):
         steer_data.append(float(sample[3]))
         idx+=1
 
-    fig, ax = plt.subplots(1)
+    fig, [ax1, ax2] = plt.subplots(2)
     # Display histogram of steering control.
     hist, bins = np.histogram(steer_data, bins=20)
-    ax.bar(bins[:-1], hist, width=0.5)
+    ax1.bar(bins[:-1], hist, width=0.5)
+    ax2.plot(steer_data[50:250])
 
     ncols = 10
     nrows = np.math.ceil(num_images/ncols)
@@ -107,6 +108,15 @@ def select_image(batch_sample):
         steer = steer_centre - steer_offset
     # Convert image to RGB format since cv2.imread() uses BGR
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # Choose randomly whether to flip this image horizontally
+    flip_prop = np.random.uniform()
+    if flip_prop > 0.5:
+        # Flip the image half the time
+        image = np.fliplr(image)
+        # Correct steering for flipped image
+        steer = -steer
+    # Brightness augmentation for robustness
+    image = brighten_img(image)
     return image, steer
 
 def brighten_img(img):
@@ -118,42 +128,35 @@ def brighten_img(img):
     img_out = cv2.cvtColor(img_out, cv2.COLOR_HSV2RGB)
     return img_out
 
-def process_image(image, steer, mode = 'train'):
-    # Flip and brighten images only during training phase
-    if mode == 'train':
-        # Choose randomly whether to flip this image horizontally
-        flip_prop = np.random.uniform()
-        if flip_prop > 0.5:
-            # Flip the image half the time
-            image = np.fliplr(image)
-            # Correct steering for flipped image
-            steer = -steer
-        # Brightness augmentation for robustness
-        image = brighten_img(image)
+def process_image(image):
     # Crop image  rows based on crop_top and crop_bottom parameters
     image = image[crop_top:img_height - crop_bottom, :, :]
     # Resize image to reduce processing
     image = cv2.resize(image, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
     # Normalise pixels between (-0.9,0.9)
     image = (image / 255.0 - 0.9).astype(np.float32)
-    return image, steer
+    return image
 
 def generator(samples, batch_size):
     X = np.zeros((batch_size, resize_height, resize_width, img_channels),dtype=np.float32)
     y = np.zeros(batch_size, dtype=np.float32)
-    num_samples = len(samples)
+    np.random.shuffle(samples)
+    n_samples = len(samples)
 
     while 1: # Loop forever so the generator never terminates
-        np.random.shuffle(samples)
-        for offset in range(0, num_samples, batch_size):
-            i=0
-            batch_samples = samples[offset:offset+batch_size]
-            for batch_sample in batch_samples:
-                steer_prob = np.random.uniform()
-                image, steer = select_image(batch_sample)
-                X[i], y[i] = process_image(image, steer)
-                i+=1
-            yield sklearn.utils.shuffle(X, y)
+        for idx in range(batch_size):
+            keep_straight_steer = 0
+            while not keep_straight_steer:
+                sample_idx = np.random.randint(n_samples)
+                batch_sample = samples[sample_idx]
+                steer = float(batch_sample[3])
+                if abs(steer)<0.1:
+                    steer_prob = np.random.randn()
+                    if abs(steer_prob)> 1:
+                        keep_straight_steer = 1
+            image, y[idx] = select_image(batch_sample)
+            X[idx] = process_image(image)
+        yield sklearn.utils.shuffle(X, y)
 
 def train_model():
     # Split samples into training and validation data sets

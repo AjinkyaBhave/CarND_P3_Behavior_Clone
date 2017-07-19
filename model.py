@@ -21,7 +21,7 @@ batch_size = 32
 steer_max = 25
 steer_min = -25
 # Correction to steering for left and right images. Tunable.
-steer_offset = 0.02
+steer_offset = 0.25
 # Data directory containing images and control measurements
 data_dir = './dataset/initial/'
 img_dir = data_dir+'IMG/'
@@ -202,8 +202,9 @@ if __name__ == "__main__":
             samples.append(line)
     # Remove first line containing column headings
     del samples[0]
+    # Display data statistics
     analyse_data(samples)
     # Train neural network
     train_history = train_model()
     # Display training performance
-    #plot_history(train_history)
+    plot_history(train_history)

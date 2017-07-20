@@ -22,8 +22,12 @@ steer_max = 25
 steer_min = -25
 # Correction to steering for left and right images. Tunable.
 steer_offset = 0.25
+steer_prob = 0.7  # Threshold for keeping the sample with straight steer.
+steer_dev = 0.1 # Deviation from zero to be considered straight driving
+# Threshold for flipping image horizontally
+flip_prob = 0.5
 # Data directory containing images and control measurements
-data_dir = './dataset/initial/'
+data_dir = './dataset/track1/final/'
 img_dir = data_dir+'IMG/'
 # File to save current best network with weights
 checkpoint_file = './model_checkpoint/model.h5'
@@ -47,7 +51,7 @@ def analyse_data(samples, num_images=20):
     idx = 0
     for sample in samples:
         if idx in img_idx:
-            image = cv2.imread(data_dir + sample[0])
+            image = cv2.imread(img_dir + sample[0].split('/')[-1])
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             image = image[crop_top:img_height-crop_bottom,:,:]
             image = brighten_img(image)
@@ -94,8 +98,6 @@ def select_image(batch_sample):
     img_id = np.random.randint(2)
     # Read steering command
     steer_centre = float(batch_sample[3])
-    # Threshold for flipping image horizontally
-    flip_prob = 0.5
     if img_id == 0:
         image = cv2.imread(img_dir + batch_sample[0].split('/')[-1])
         # Use original steering for the centre camera image
@@ -143,8 +145,6 @@ def generator(samples, batch_size):
     y = np.zeros(batch_size, dtype=np.float32)
     np.random.shuffle(samples)
     n_samples = len(samples)
-    steer_prob = 0.7  # Threshold for keeping the sample with straight steer.
-    steer_dev = 0.1 # Deviation from zero to be considered straight driving
 
     while 1: # Loop forever so the generator never terminates
         for idx in range(batch_size):
@@ -194,7 +194,7 @@ def train_model():
     model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
     train_history = model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,
                                         validation_data=validation_generator,
-                                        validation_steps=validation_steps, epochs=5,
+                                        validation_steps=validation_steps, epochs=20,
                                         callbacks=[early_stopping, model_checkpoint])
     print("Training completed.")
     return train_history
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # Read training data
     samples = read_data()
     # Display data statistics
-    analyse_data(samples)
+    #analyse_data(samples)
     # Train neural network
     train_history = train_model()
     # Display training performance

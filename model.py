@@ -94,6 +94,8 @@ def select_image(batch_sample):
     img_id = np.random.randint(2)
     # Read steering command
     steer_centre = float(batch_sample[3])
+    # Threshold for flipping image horizontally
+    flip_prob = 0.5
     if img_id == 0:
         image = cv2.imread(img_dir + batch_sample[0].split('/')[-1])
         # Use original steering for the centre camera image
@@ -109,8 +111,7 @@ def select_image(batch_sample):
     # Convert image to RGB format since cv2.imread() uses BGR
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     # Choose randomly whether to flip this image horizontally
-    flip_prop = np.random.uniform()
-    if flip_prop > 0.5:
+    if np.random.uniform() > flip_prob:
         # Flip the image half the time
         image = np.fliplr(image)
         # Correct steering for flipped image
@@ -142,6 +143,8 @@ def generator(samples, batch_size):
     y = np.zeros(batch_size, dtype=np.float32)
     np.random.shuffle(samples)
     n_samples = len(samples)
+    steer_prob = 0.7  # Threshold for keeping the sample with straight steer.
+    steer_dev = 0.1 # Deviation from zero to be considered straight driving
 
     while 1: # Loop forever so the generator never terminates
         for idx in range(batch_size):
@@ -150,12 +153,12 @@ def generator(samples, batch_size):
                 sample_idx = np.random.randint(n_samples)
                 batch_sample = samples[sample_idx]
                 steer = float(batch_sample[3])
-                if abs(steer)<0.1:
-                    steer_prob = np.random.randn()
-                    if abs(steer_prob)> 1:
+                if abs(steer)<steer_dev:
+                    if abs(np.random.uniform())> steer_prob:
                         keep_straight_steer = 1
             image, y[idx] = select_image(batch_sample)
             X[idx] = process_image(image)
+        #print(y[])
         yield sklearn.utils.shuffle(X, y)
 
 def train_model():
@@ -196,7 +199,7 @@ def train_model():
     print("Training completed.")
     return train_history
 
-if __name__ == "__main__":
+def read_data():
     # Read in contents of driving data CSV file
     samples = []
     with open(data_dir + 'driving_log.csv') as csvfile:
@@ -205,6 +208,11 @@ if __name__ == "__main__":
             samples.append(line)
     # Remove first line containing column headings
     del samples[0]
+    return samples
+
+if __name__ == "__main__":
+    # Read training data
+    samples = read_data()
     # Display data statistics
     analyse_data(samples)
     # Train neural network

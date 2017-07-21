@@ -1,16 +1,17 @@
-from keras.layers import Flatten, Dense, Conv2D
-from keras.models import Sequential, load_model
+from keras.layers import Flatten, Dense, Conv2D, Dropout
+from keras.models import Sequential
+from keras.utils import plot_model
+from keras import backend as K
 
 def alvinn(img_height, img_width, img_channels):
     # Network to steer car based on Deam Pomerleau's PhD thesis.
     model = Sequential()
-    #model.add(Cropping2D(cropping=((crop_top, crop_bottom), (0, 0)), input_shape=(img_height, img_width, img_channels)))
-    #model.add(Lambda(lambda x: (x / 255.0) - 0.5))
     model.add(Flatten(input_shape=(img_height, img_width, img_channels)))
     # Hidden layer of 4 units
-    model.add(Dense(4))
+    model.add(Dense(4,activation='tanh'))
     # Output steering angle
     model.add(Dense(1))
+    plot_model(model, to_file='alvinn.png')
     print(model.summary())
     return model
 
@@ -31,5 +32,6 @@ def nvidia(img_height, img_width, img_channels):
     model.add(Dense(10))
     # Output steering angle
     model.add(Dense(1))
+    plot_model(model, to_file='nvidia.png')
     print(model.summary())
     return model

@@ -3,12 +3,13 @@ import cv2
 import numpy as np
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
+from keras.optimizers import Adam
 import sklearn
 from sklearn.model_selection import train_test_split
 from matplotlib import pyplot as plt
 import os.path
 from drive_networks import alvinn, nvidia
-#from process_images import brighten_img
+from visualise import *
 
 ### PARAMETERS SECTION.
 # Use ALVINN network if true. Else use Nvidia network.
@@ -17,6 +18,10 @@ ALVINN = 0
 ## Training parameters
 # Batch size for generator function in training and validation
 batch_size = 32
+# Number of epochs
+n_epochs = 2
+# Learning rate
+learn_rate = 0.001
 # Maximum steering angle in degrees
 steer_max = 25
 steer_min = -25
@@ -35,9 +40,14 @@ checkpoint_file = './model_checkpoint/model.h5'
 ## Image parameters
 img_height    = 160 # Original image rows
 img_width     = 320 # Original image columns
-img_channels  = 3   # RGB channels
-resize_width  = 64  # Resized image rows
-resize_height = 64  # Resized image columns
+if ALVINN:
+    img_channels  = 1   # Grayscale channel
+    resize_width  = 30  # Resized image rows
+    resize_height = 32  # Resized image columns
+else:
+    img_channels  = 3   # RGB channels
+    resize_width  = 64  # Resized image rows
+    resize_height = 64  # Resized image columns
 crop_top      = 50  # Number of pixel rows to remove from image top
 crop_bottom   = 20  # Number of pixel rows to remove from image bottom
 crop_height   = img_height-crop_top-crop_bottom # cropped image height
@@ -47,38 +57,48 @@ def analyse_data(samples, num_images=20):
     img_idx = np.random.randint(0, len(samples), num_images)
     steer_data = []
     image_data = []
+    steer_plot = []
     cmap = None
+    #samples_random = [samples[i] for i in img_idx]
     idx = 0
     for sample in samples:
         if idx in img_idx:
-            image = cv2.imread(img_dir + sample[0].split('/')[-1])
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image = image[crop_top:img_height-crop_bottom,:,:]
-            image = brighten_img(image)
-            if ALVINN:
-                image_sum = (image[:,:,0].astype(np.float32)+image[:,:,1].astype(np.float32)+image[:,:,2].astype(np.float32))
-                image_sum[image_sum[:,:]<1.0]=1.0
-                image = (image[:,:,2]/image_sum + image[:,:,2]/255.0).astype(np.float32)
-                cmap = 'gray'
+            image, steer_ = select_image(sample)
+            steer_plot.append(["%.3f" % steer_])
+            image = process_image(image)
+            image_data.append(image)
+        if ALVINN:
+            image_sum = (image[:,:,0].astype(np.float32)+image[:,:,1].astype(np.float32)+image[:,:,2].astype(np.float32))
+            image_sum[image_sum[:,:]<1.0]=1.0
+            image = (image[:,:,2]/image_sum + image[:,:,2]/255.0).astype(np.float32)
+            cmap = 'gray'
             image_data.append(image)
         steer_data.append(float(sample[3]))
         idx+=1
 
+    steer_proc = process_steer(steer_data)
     fig, [ax1, ax2] = plt.subplots(2)
+    fig.suptitle('Steering Data Analysis', fontsize=20)
     # Display histogram of steering control.
-    hist, bins = np.histogram(steer_data, bins=20)
-    ax1.bar(bins[:-1], hist, width=0.5)
-    ax2.plot(steer_data[50:250])
+    hist, bins = np.histogram(steer_data, bins='auto')
+    ax1.bar(bins[:-1], hist, width=0.1)
+    ax1.set_title('Histogram')
+    ax2.plot(steer_data)
+    ax2.plot(steer_proc)
+    ax2.set_title('Time Series')
 
     ncols = 10
     nrows = np.math.ceil(num_images/ncols)
     # Display images in subplots
     fig, ax = plt.subplots(nrows, ncols, figsize=(64, 64))
+    fig.suptitle("Processed Images", fontsize=20)
     fig.subplots_adjust(hspace=.1, wspace=.05)
     ax = ax.ravel()
     for i in range(num_images):
-        ax[i].imshow(image_data[i], cmap=cmap)
+        ax[i].imshow(image_data[i], cmap=cmap, vmin=-1.0, vmax=1.0)
+        ax[i].set_title(steer_plot[i])
         ax[i].axis('off')
+    plt.tight_layout()
     plt.show()
 
 def plot_history(train_history):
@@ -124,11 +144,16 @@ def select_image(batch_sample):
 
 def brighten_img(img):
     # Randomly brighten image by up to 30%
-    img_out = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    dbright = 0.3+np.random.uniform()
-    img_out[:,:,2] = img_out[:,:,2]*dbright
-    #img_out[img_out[:,:,2]>255] = 255
-    img_out = cv2.cvtColor(img_out, cv2.COLOR_HSV2RGB)
+    dbright = 0.3 + np.random.uniform()
+    if ALVINN:
+        img_out = img
+        img_out[:, :, 0] = img[:, :, 0] * dbright
+        img_out[img_out[:, :, 0] > 255] = 255
+    else:
+        img_out = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        img_out[:,:,2] = img_out[:,:,2]*dbright
+        #img_out[img_out[:,:,2]>255] = 255
+        img_out = cv2.cvtColor(img_out, cv2.COLOR_HSV2RGB)
     return img_out
 
 def process_image(image):
@@ -136,9 +161,21 @@ def process_image(image):
     image = image[crop_top:img_height - crop_bottom, :, :]
     # Resize image to reduce processing
     image = cv2.resize(image, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
-    # Normalise pixels between (-0.9,0.9)
-    image = (image / 255.0 - 0.9).astype(np.float32)
+    if ALVINN:
+        image_sum = (image[:, :, 0].astype(np.float32) + image[:, :, 1].astype(np.float32)
+                     + image[:, :, 2].astype(np.float32))
+        image_sum[image_sum[:, :] < 1.0] = 1.0
+        image = (image[:, :, 2] / image_sum + image[:, :, 2] / 255.0).astype(np.float32)
+        image = image.reshape(image.shape + (1,))
+    else:
+        # Normalise pixels between (-0.9,0.9)
+        image = (image / 255.0 - 0.9).astype(np.float32)
     return image
+
+def process_steer(samples, n=3):
+    ret = np.cumsum(samples, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret/n
 
 def generator(samples, batch_size):
     X = np.zeros((batch_size, resize_height, resize_width, img_channels),dtype=np.float32)
@@ -158,7 +195,6 @@ def generator(samples, batch_size):
                         keep_straight_steer = 1
             image, y[idx] = select_image(batch_sample)
             X[idx] = process_image(image)
-        #print(y[])
         yield sklearn.utils.shuffle(X, y)
 
 def train_model():
@@ -191,13 +227,25 @@ def train_model():
     # Train model
     steps_per_epoch = np.math.ceil(len(train_samples) / batch_size)
     validation_steps = np.math.ceil(len(validation_samples) / batch_size)
-    model.compile(loss='mse', optimizer='adam', metrics=['accuracy'])
+    adam = Adam(lr=learn_rate)
+    model.compile(loss='mse', optimizer=adam, metrics=['accuracy'])
     train_history = model.fit_generator(train_generator, steps_per_epoch=steps_per_epoch,
                                         validation_data=validation_generator,
-                                        validation_steps=validation_steps, epochs=20,
+                                        validation_steps=validation_steps, epochs=n_epochs,
                                         callbacks=[early_stopping, model_checkpoint])
     print("Training completed.")
     return train_history
+
+def visualise_network():
+    if os.path.isfile(checkpoint_file):
+        model = load_model(checkpoint_file)
+    idx= np.random.randint(len(samples))
+    visual_sample = samples[idx]
+    image = cv2.imread(img_dir + visual_sample[0].split('/')[-1])
+    image = process_image(image)
+    plt.imshow(image)
+    activation_maps = get_activations(model, [image], print_shape_only=True)
+    display_activations(activation_maps)
 
 def read_data():
     # Read in contents of driving data CSV file
@@ -217,5 +265,7 @@ if __name__ == "__main__":
     #analyse_data(samples)
     # Train neural network
     train_history = train_model()
+    # Display network activations
+    visualise_network()
     # Display training performance
-    plot_history(train_history)
+    #plot_history(train_history)

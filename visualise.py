@@ -66,5 +66,5 @@ def display_activations(activation_maps):
                 activations = np.expand_dims(activations, axis=0)
         else:
             raise Exception('len(shape) = 3 has not been implemented.')
-        plt.imshow(activations, interpolation='None', cmap='jet')
+        plt.imshow(activations, interpolation='None', cmap='gray')
         plt.show()

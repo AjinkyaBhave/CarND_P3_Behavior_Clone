@@ -10,27 +10,31 @@ from matplotlib import pyplot as plt
 import os.path
 from drive_networks import alvinn, nvidia
 from visualise import *
+import os
+
+# Set path to Graphviz to visualise network
+#os.environ["PATH"] += os.pathsep + 'C:/Program Files (x86)/Graphviz2.38/bin/'
 
 ### PARAMETERS SECTION.
-# Use ALVINN network if true. Else use Nvidia network.
-ALVINN = 0
+# Use ALVINN network if true. Else use NVIDIA network.
+ALVINN = 1
 
 ## Training parameters
 # Batch size for generator function in training and validation
 batch_size = 32
 # Number of epochs
-n_epochs = 2
+n_epochs = 8
 # Learning rate
-learn_rate = 0.001
+learn_rate = 0.0001
 # Maximum steering angle in degrees
 steer_max = 25
 steer_min = -25
 # Correction to steering for left and right images. Tunable.
 steer_offset = 0.25
 steer_prob = 0.7  # Threshold for keeping the sample with straight steer.
-steer_dev = 0.1 # Deviation from zero to be considered straight driving
+steer_dev = 0.8 # Deviation from zero to be considered straight driving
 # Threshold for flipping image horizontally
-flip_prob = 0.5
+flip_prob = 0.7
 # Data directory containing images and control measurements
 data_dir = './dataset/track1/final/'
 img_dir = data_dir+'IMG/'
@@ -53,25 +57,18 @@ crop_bottom   = 20  # Number of pixel rows to remove from image bottom
 crop_height   = img_height-crop_top-crop_bottom # cropped image height
 
 def analyse_data(samples, num_images=20):
-    # Select ten random images to display for visual confirmation of processing
+    # Select random images to display for visual confirmation of pre-processing
     img_idx = np.random.randint(0, len(samples), num_images)
     steer_data = []
     image_data = []
     steer_plot = []
     cmap = None
-    #samples_random = [samples[i] for i in img_idx]
     idx = 0
     for sample in samples:
         if idx in img_idx:
             image, steer_ = select_image(sample)
             steer_plot.append(["%.3f" % steer_])
             image = process_image(image)
-            image_data.append(image)
-        if ALVINN:
-            image_sum = (image[:,:,0].astype(np.float32)+image[:,:,1].astype(np.float32)+image[:,:,2].astype(np.float32))
-            image_sum[image_sum[:,:]<1.0]=1.0
-            image = (image[:,:,2]/image_sum + image[:,:,2]/255.0).astype(np.float32)
-            cmap = 'gray'
             image_data.append(image)
         steer_data.append(float(sample[3]))
         idx+=1
@@ -94,23 +91,16 @@ def analyse_data(samples, num_images=20):
     fig.suptitle("Processed Images", fontsize=20)
     fig.subplots_adjust(hspace=.1, wspace=.05)
     ax = ax.ravel()
+    if ALVINN:
+        cmap='gray'
     for i in range(num_images):
-        ax[i].imshow(image_data[i], cmap=cmap, vmin=-1.0, vmax=1.0)
+        if ALVINN:
+            ax[i].imshow(image_data[i][:,:,0], cmap=cmap)
+        else:
+            ax[i].imshow(image_data[i], cmap=cmap)
         ax[i].set_title(steer_plot[i])
         ax[i].axis('off')
     plt.tight_layout()
-    plt.show()
-
-def plot_history(train_history):
-    # Print the keys contained in the history object
-    print(train_history.history.keys())
-    # Plot the training and validation loss for each epoch
-    plt.plot(train_history.history['loss'])
-    plt.plot(train_history.history['val_loss'])
-    plt.title('Training Performance')
-    plt.ylabel('MSE')
-    plt.xlabel('epoch')
-    plt.legend(['training set', 'validation set'], loc='upper right')
     plt.show()
 
 def select_image(batch_sample):
@@ -142,19 +132,14 @@ def select_image(batch_sample):
     image = brighten_img(image)
     return image, steer
 
-def brighten_img(img):
+def brighten_img(image):
     # Randomly brighten image by up to 30%
     dbright = 0.3 + np.random.uniform()
-    if ALVINN:
-        img_out = img
-        img_out[:, :, 0] = img[:, :, 0] * dbright
-        img_out[img_out[:, :, 0] > 255] = 255
-    else:
-        img_out = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-        img_out[:,:,2] = img_out[:,:,2]*dbright
-        #img_out[img_out[:,:,2]>255] = 255
-        img_out = cv2.cvtColor(img_out, cv2.COLOR_HSV2RGB)
-    return img_out
+    image_out = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    image_out[:,:,2] = image_out[:,:,2]*dbright
+    image_out[image_out[:,:,2]>255] = 255
+    image_out = cv2.cvtColor(image_out, cv2.COLOR_HSV2RGB)
+    return image_out
 
 def process_image(image):
     # Crop image  rows based on crop_top and crop_bottom parameters
@@ -162,20 +147,37 @@ def process_image(image):
     # Resize image to reduce processing
     image = cv2.resize(image, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
     if ALVINN:
-        image_sum = (image[:, :, 0].astype(np.float32) + image[:, :, 1].astype(np.float32)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)[:,:,2]
+        #image = cv2.equalizeHist(image)
+        image = 255 - image
+        '''image_sum = (image[:, :, 0].astype(np.float32) + image[:, :, 1].astype(np.float32)
                      + image[:, :, 2].astype(np.float32))
+        # Prevent division by zero value pixels
         image_sum[image_sum[:, :] < 1.0] = 1.0
-        image = (image[:, :, 2] / image_sum + image[:, :, 2] / 255.0).astype(np.float32)
+        image = (image[:, :, 0] / image_sum + image[:, :, 0] / 255.0).astype(np.float32)
+        '''
         image = image.reshape(image.shape + (1,))
-    else:
-        # Normalise pixels between (-0.9,0.9)
-        image = (image / 255.0 - 0.9).astype(np.float32)
+    # Normalise pixels between (-0.9,0.9)
+    image = (image / 255.0 - 0.5).astype(np.float32)
     return image
 
 def process_steer(samples, n=3):
+    # Filter steering commands using a moving average of size 3
     ret = np.cumsum(samples, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
     return ret/n
+
+def plot_history(train_history):
+    # Print the keys contained in the history object
+    print(train_history.history.keys())
+    # Plot the training and validation loss for each epoch
+    plt.plot(train_history.history['loss'])
+    plt.plot(train_history.history['val_loss'])
+    plt.title('Training Performance')
+    plt.ylabel('MSE')
+    plt.xlabel('epoch')
+    plt.legend(['training set', 'validation set'], loc='upper right')
+    plt.show()
 
 def generator(samples, batch_size):
     X = np.zeros((batch_size, resize_height, resize_width, img_channels),dtype=np.float32)
@@ -206,9 +208,9 @@ def train_model():
 
     # Keras callback functions used during training
     # Stop training if validation accuracy decreases after 'patience' epochs
-    early_stopping = EarlyStopping(monitor='val_acc', patience=3)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3)
     # Save best model based on validation accuracy
-    model_checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_acc', save_best_only=True, save_weights_only=False,
+    model_checkpoint = ModelCheckpoint(checkpoint_file, monitor='val_loss', save_best_only=True, save_weights_only=False,
                                        mode='auto')
 
     # Create driving network model
@@ -266,6 +268,6 @@ if __name__ == "__main__":
     # Train neural network
     train_history = train_model()
     # Display network activations
-    visualise_network()
+    #visualise_network()
     # Display training performance
-    #plot_history(train_history)
+    plot_history(train_history)

@@ -96,29 +96,6 @@ At the end of the training process, the vehicle is able to drive autonomously ar
 
 The final model architecture (drive_networks.py lines 22-42) consists of the NVIDIA convolution neural network with the following layers and layer sizes:
 
-#### Layer Type              Output Shape              Param  #   
-conv2d_1 (Conv2D)            (None, 30, 30, 24)        1824      
-_________________________________________________________________
-conv2d_2 (Conv2D)            (None, 13, 13, 36)        21636     
-_________________________________________________________________
-conv2d_3 (Conv2D)            (None, 5, 5, 48)          43248     
-_________________________________________________________________
-conv2d_4 (Conv2D)            (None, 3, 3, 64)          27712     
-_________________________________________________________________
-conv2d_5 (Conv2D)            (None, 1, 1, 64)          36928     
-_________________________________________________________________
-flatten_1 (Flatten)          (None, 64)                0         
-_________________________________________________________________
-dense_1 (Dense)              (None, 1164)              75660     
-_________________________________________________________________
-dense_2 (Dense)              (None, 100)               116500    
-_________________________________________________________________
-dense_3 (Dense)              (None, 50)                5050      
-_________________________________________________________________
-dense_4 (Dense)              (None, 10)                510       
-_________________________________________________________________
-dense_5 (Dense)              (None, 1)                 11        
-
 ![NVIDIA Network][image1]
 
 
@@ -136,6 +113,6 @@ Since the car needs to know how to recover when close to the road edge, I used t
 
 Since the NVIDIA network has a large number of parameters, it would require more data than just the initial Udacity set. To augment this data, I chose to flip the image and brighten it randomly, to help the network deal with tree shadows on the track. I did not do further translation since the left/right cameras are already providing translated images. I also did not rotate or zoom the images. This is because rotation caused black borders for the missing pixels, which could make the network see those as features, and zooming would also confuse it since the steering angle would also have to be augmented for nearer images. I wanted to try shadow augmentation but since the network was performing adequately with flipping and brightening only, I did not implement anything further.
 
-The process_image() function crops, resizes, and normalises the image so that the final 64x64 image has only the road seen, without the trees and the car bonnet. This is then given as training images to the network. The process_image() is also called in drive.py (line 64) to ensure the same pre-processed images are given to the network during prediction. Examples of 20 randomly selected training images with augmentation applied are shown below.
+The process_image() function crops, resizes, and normalises the image so that the final 64x64 image has only the road ahead, without the trees and the car bonnet. This is then given as a training image to the network. The process_image() function is also called in drive.py (line 64) to ensure the same pre-processed images are given to the network during prediction. Examples of 20 randomly selected training images with augmentation applied are shown below.
 
 ![Training Images][image4]

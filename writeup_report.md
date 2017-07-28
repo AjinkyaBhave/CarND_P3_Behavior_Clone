@@ -16,11 +16,12 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./report/nvidia_network.png "NVIDIA Network"
-[image2]: ./report/train_perf_t1.png  "Training Performance"
-[image3]: ./report/steer_analysis.png "Steering Analysis"
-[image4]: ./report/track1_images.jpg  "Example Images"
-
+[image1]: ./report/nvidia_network.png 			"NVIDIA Network"
+[image2]: ./report/train_perf_t1.png  			"Training Performance"
+[image3]: ./report/steer_analysis.png 			"Steering Analysis"
+[image4]: ./report/track1_images.jpg  			"Example Images"
+[image5]: ./report/alvinn_network.png 			"ALVINN Network"
+[image6]: ./report/B_channel_proc_images.jpg 	"Blue Channel"
 
 ## Rubric Points
 ###Here I will consider the [rubric points](https://review.udacity.com/#!/rubrics/432/view) individually and describe how I addressed each point in my implementation.  
@@ -43,7 +44,7 @@ Using the Udacity provided simulator and my drive.py file, the car can be driven
 ```sh
 python drive.py ./model.h5
 ```
-The video file is placed in ./video/track1.mp4 and shows the performance of the NVIDIA-based network around one lap of Track 1.
+The video file is placed in *./video/track1.mp4* and shows the performance of the NVIDIA-based network around one lap of Track 1.
 
 ####3. Submission code is usable and readable
 
@@ -113,6 +114,19 @@ Since the car needs to know how to recover when close to the road edge, I used t
 
 Since the NVIDIA network has a large number of parameters, it would require more data than just the initial Udacity set. To augment this data, I chose to flip the image and brighten it randomly, to help the network deal with tree shadows on the track. I did not do further translation since the left/right cameras are already providing translated images. I also did not rotate or zoom the images. This is because rotation caused black borders for the missing pixels, which could make the network see those as features, and zooming would also confuse it since the steering angle would also have to be augmented for nearer images. I wanted to try shadow augmentation but since the network was performing adequately with flipping and brightening only, I did not implement anything further.
 
-The process_image() function crops, resizes, and normalises the image so that the final 64x64 image has only the road ahead, without the trees and the car bonnet. This is then given as a training image to the network. The process_image() function is also called in drive.py (line 64) to ensure the same pre-processed images are given to the network during prediction. Examples of 20 randomly selected training images with augmentation applied are shown below.
+The process_image() function crops, resizes, and normalises the image so that the final 64x64 image contains only the road ahead, without the trees and the car bonnet. This is then given as a training image to the network. The process_image() function is also called in drive.py (line 64) to ensure the same pre-processed images are given to the network during prediction. Examples of 20 randomly selected training images with augmentation applied are shown below.
 
 ![Training Images][image4]
+
+### ALVINN Performance
+Since the idea for this project came from NVIDIA's DAVE2 paper, which itself owes its genesis to the ALVINN project by Dean Pomerleau at CMU's RI, I wanted to see how the ALVINN-type network compares with today's deep learning approach to car steering. I read Dean's PhD thesis and implemented a network almost like his. The architecture is shown below.
+
+![ALVINN Network][image5]
+
+I have used the same image size (30,32,1), same number of first layer hidden units (4), and activation functions (tanh). Where this network differs from the original is the output layer. ALVINN had 30 output units to differentiate between discrete steering directions, and the output was a gaussian distribution over the correct direction. I ran out of time to implement this since it involved pre-processing the steering training data to make a gaussian vector, and also changing the drive.py file to pre-process the steering from the simulator. 
+
+To make the networks almost the same, I have added another hidden layer of 30 units, and connected that to a final output layer of one neuron. This tries to give this network the same representational power as the original, while keeping the output the same as needed by the Udacity P3 simulator interface. I also tried to use the same pre-processing as Dean did, namely only using the B-channel of the RGB image with normalisation, to get rid of trees and shadows. However, the original network dealt with real camera images with real sun rays. The whole idea behind that approach was that road shadows would contain a significant blue component because of reflection from the sky. In the simulator, however, this approach did not work and led to washed out images, as shown below. I finally used the (inverted) S-channel from the HLS colour space to highlight the drive-able road section. This seemed to help the network learn much better than grayscale or B-channel inputs. 
+
+![Blue Channel Image][image6]
+
+I used the same training data to train my ALVINN network, with identical training parameters. After training on the Udacity data, the network learnt to drive straight but was not able to take all the corners successfully. I augmented training by driving only on those portions where the network had difficulty. The final result is saved in *./video/alvinn_track1.mp4*.

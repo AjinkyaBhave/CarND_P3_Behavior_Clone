@@ -25,16 +25,16 @@ batch_size = 32
 # Number of epochs
 n_epochs = 8
 # Learning rate
-learn_rate = 0.0001
+learn_rate = 0.001
 # Maximum steering angle in degrees
 steer_max = 25
 steer_min = -25
 # Correction to steering for left and right images. Tunable.
 steer_offset = 0.25
 steer_prob = 0.7  # Threshold for keeping the sample with straight steer.
-steer_dev = 0.8 # Deviation from zero to be considered straight driving
+steer_dev = 1.0   # Deviation from zero to be considered straight driving
 # Threshold for flipping image horizontally
-flip_prob = 0.7
+flip_prob = 0.5
 # Data directory containing images and control measurements
 data_dir = './dataset/track1/striped_turn/'
 img_dir = data_dir+'IMG/'
@@ -68,7 +68,7 @@ def analyse_data(samples, num_images=10):
         if idx in img_idx:
             image, steer_ = select_image(sample)
             steer_plot.append(["%.3f" % steer_])
-            #image = process_image(image)
+            image = process_image(image)
             image_data.append(image)
         steer_data.append(float(sample[3]))
         idx+=1
@@ -274,10 +274,10 @@ if __name__ == "__main__":
     # Read training data
     samples = read_data()
     # Display data statistics
-    analyse_data(samples)
+    # analyse_data(samples)
     # Train neural network
-    #train_history = train_model()
+    train_history = train_model()
     # Display network activations
     #visualise_network()
     # Display training performance
-    #plot_history(train_history)
+    # plot_history(train_history)

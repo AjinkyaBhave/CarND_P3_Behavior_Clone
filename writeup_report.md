@@ -19,10 +19,8 @@ The goals / steps of this project are the following:
 [image1]: ./report/nvidia_network.png "NVIDIA Network"
 [image2]: ./report/train_perf_t1.png  "Training Performance"
 [image3]: ./report/steer_analysis.png "Steering Analysis"
-[image4]: ./report/placeholder_small.png "Recovery Image"
-[image5]: ./report/placeholder_small.png "Recovery Image"
-[image6]: ./report/placeholder_small.png "Normal Image"
-[image7]: ./report/placeholder_small.png "Flipped Image"
+[image4]: ./report/track1_images.jpg  "Example Images"
+
 
 ## Rubric Points
 ###Here I will consider the [rubric points](https://review.udacity.com/#!/rubrics/432/view) individually and describe how I addressed each point in my implementation.  
@@ -71,7 +69,7 @@ The model was trained and validated on different data sets to ensure that the mo
 
 ####3. Model parameter tuning
 
-The model used an Adam optimizer with a default learning rate of 0.001, so the learning rate was not tuned manually (model.py lines 28, 232). I read the Keras documentation and found out that the fully-connected layers were default initialised with the Glorot/Xavier uniform initialiser, which is quite good. So I did not experiment any further with different initial weights or bias settings for the dense layers. I used 10 epochs to start training and used 3-4 epochs each time I fine-tuned the model for certain road sections. I kept the batch size at a constant 32 throughout, since this did not seem to have much effect on the training error or speed.
+The model used an Adam optimizer with a default learning rate of 0.001, so the learning rate was not tuned manually (model.py lines 28, 241). I read the Keras documentation and found out that the fully-connected layers were default initialised with the Glorot/Xavier uniform initialiser, which is quite good. So I did not experiment any further with different initial weights or bias settings for the dense layers. I used 10 epochs to start training and used 3-4 epochs each time I fine-tuned the model for certain road sections. I kept the batch size at a constant 32 throughout, since this did not seem to have much effect on the training error or speed.
 
 ####4. Appropriate training data
 
@@ -87,21 +85,18 @@ The overall strategy for deriving a model architecture was to choose a minimal a
 
 In order to gauge how well the model was working, I split my image and steering angle data into a training and validation set. I used 20% of the data for validation (model.py line 204). Since I am using early stopping, the training will automatically stop once the validation error is not improving after a fixed number of epochs, thus preventing overfitting. After training the model for 10 epochs with the Udacity data, I found it was driving around the track reasonably well. 
 
-The main problem areas were the dirt boundary and the sharp turn towards the end of the track with the striped boundary. To improve the driving behavior in these cases, I augmented the data for those sections of the road and retrained the model iteratively with a learning rate of 0.0001 and 3-4 epochs. All data sets can be found in the appropriately named subfolders in the main *./dataset/track1* folder. 
-
-The training performance after fine-tuning is shown below.
+The main problem areas were the dirt boundary and the sharp turn towards the end of the track with the striped boundary. To improve the driving behavior in these cases, I augmented the data for those sections of the road and retrained the model iteratively on these data sets. The training performance after fine-tuning is shown below. The very small gap between training and validation error shows that the network has not over-fitted on the training data.
 
 ![Training Performance][image2]
 
-At the end of the training process, the vehicle is able to drive autonomously around the track without leaving the road for multiple laps. I tested with speeds of  9 mph and 15 mph and the performance is similar at both speeds.
-The final video is placed at *./video/track1.mp4.* 
+At the end of the training process, the vehicle is able to drive autonomously around Track 1 for multiple laps without leaving the road. I tested with speeds of  9 mph and 15 mph by changing the setpoint in drive.py, and the performance is similar at both speeds. The final video is placed at *./video/track1.mp4.* 
 
 
 ####2. Final Model Architecture
 
 The final model architecture (drive_networks.py lines 22-42) consists of the NVIDIA convolution neural network with the following layers and layer sizes:
 
-### Layer (type)             Output Shape              Param  #   
+#### Layer Type              Output Shape              Param  #   
 conv2d_1 (Conv2D)            (None, 30, 30, 24)        1824      
 _________________________________________________________________
 conv2d_2 (Conv2D)            (None, 13, 13, 36)        21636     
@@ -129,28 +124,18 @@ dense_5 (Dense)              (None, 1)                 11
 
 ####3. Creation of the Training Set & Training Process
 
-I analysed the Udacity data set by looking at the images and plotting the steering angles. The steering analysis below shows a large percentage of angles around zero, which shows a highly unbalanced data set. Training on this naively would lead to the vehicle learning to drive straight on almost all sections on the road. So I realised I would have to force the training data to have more number of turns to balance out the effect of the straight driving. The exact approach is described in the paragraph on creation the Keras fit_generator below. 
+I analysed the Udacity data set by looking at the images and plotting the steering angles. The steering analysis below shows a large percentage of angles around zero, which implies a highly unbalanced data set. Training on this naively would lead to the vehicle learning to drive straight on almost all sections on the road. So I realised I would have to ensure that the training data had more number of turns examples to balance out the effect of the straight driving. The exact approach is described in the paragraphs on the creation of the Keras generator function for fit_generator() (model.py lines 184 to 209). 
 
 ![Steering Analysis][image3]
 
-I then recorded the vehicle recovering from the left side and right sides of the road back to center so that the vehicle would learn to .... These images show what a recovery looks like starting from ... :
+I used the Udacity data to train the vehicle initially for 10 epochs. I tested it in the simulator to see what parts of the track it fails on. Then I created training data specifically for those sections of the track and iteratively trained the network, lowering the learning rate (0.0001) and epochs (3-4). The final training data set contains 9417 examples without augmentation.
 
-![alt text][image3]
-![alt text][image4]
-![alt text][image5]
+I used the Keras generator approach to allow the training process to pick up batches of examples from disk instead of storing everything in memory. Since the data is biased towards straight driving, the generator only selects straight driving examples with a probability of *steer_prob*, set at a default of 30% (model.py lines 34 and 202). This ensures that each batch contains a balanced mix of straight drive and turns. 
 
-Then I repeated this process on track two in order to get more data points.
+Since the car needs to know how to recover when close to the road edge, I used the idea suggested in the lectures and augmented the centre image with both left and right camera images. The generator randomly chooses whether which image to pick, in the select_image() function (model.py lines 110 to 124). I also corrected the steering offset for the non-centre images. I experimented with values between 0.2 to 0.3 and finally settled on 0.25 as a reasonable number for performance (model.py line 33).
 
-To augment the data sat, I also flipped images and angles thinking that this would ... For example, here is an image that has then been flipped:
+Since the NVIDIA network has a large number of parameters, it would require more data than just the initial Udacity set. To augment this data, I chose to flip the image and brighten it randomly, to help the network deal with tree shadows on the track. I did not do further translation since the left/right cameras are already providing translated images. I also did not rotate or zoom the images. This is because rotation caused black borders for the missing pixels, which could make the network see those as features, and zooming would also confuse it since the steering angle would also have to be augmented for nearer images. I wanted to try shadow augmentation but since the network was performing adequately with flipping and brightening only, I did not implement anything further.
 
-![alt text][image6]
-![alt text][image7]
+The process_image() function crops, resizes, and normalises the image so that the final 64x64 image has only the road seen, without the trees and the car bonnet. This is then given as training images to the network. The process_image() is also called in drive.py (line 64) to ensure the same pre-processed images are given to the network during prediction. Examples of 20 randomly selected training images with augmentation applied are shown below.
 
-Etc ....
-
-After the collection process, I had X number of data points. I then preprocessed this data by ...
-
-
-I finally randomly shuffled the data set and put Y% of the data into a validation set. 
-
-I used this training data for training the model. The validation set helped determine if the model was over or under fitting. The ideal number of epochs was Z as evidenced by ... I used an adam optimizer so that manually training the learning rate wasn't necessary.
+![Training Images][image4]

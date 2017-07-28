@@ -17,7 +17,7 @@ import os
 
 ### PARAMETERS SECTION.
 # Use ALVINN network if true. Else use NVIDIA network.
-ALVINN = 1
+ALVINN = 0
 
 ## Training parameters
 # Batch size for generator function in training and validation
@@ -36,7 +36,7 @@ steer_dev = 0.8 # Deviation from zero to be considered straight driving
 # Threshold for flipping image horizontally
 flip_prob = 0.7
 # Data directory containing images and control measurements
-data_dir = './dataset/track1/final/'
+data_dir = './dataset/track1/striped_turn/'
 img_dir = data_dir+'IMG/'
 # File to save current best network with weights
 checkpoint_file = './model_checkpoint/model.h5'
@@ -56,7 +56,7 @@ crop_top      = 50  # Number of pixel rows to remove from image top
 crop_bottom   = 20  # Number of pixel rows to remove from image bottom
 crop_height   = img_height-crop_top-crop_bottom # cropped image height
 
-def analyse_data(samples, num_images=20):
+def analyse_data(samples, num_images=10):
     # Select random images to display for visual confirmation of pre-processing
     img_idx = np.random.randint(0, len(samples), num_images)
     steer_data = []
@@ -68,7 +68,7 @@ def analyse_data(samples, num_images=20):
         if idx in img_idx:
             image, steer_ = select_image(sample)
             steer_plot.append(["%.3f" % steer_])
-            image = process_image(image)
+            #image = process_image(image)
             image_data.append(image)
         steer_data.append(float(sample[3]))
         idx+=1
@@ -86,11 +86,13 @@ def analyse_data(samples, num_images=20):
 
     ncols = 10
     nrows = np.math.ceil(num_images/ncols)
+    print(nrows)
     # Display images in subplots
     fig, ax = plt.subplots(nrows, ncols, figsize=(64, 64))
     fig.suptitle("Processed Images", fontsize=20)
     fig.subplots_adjust(hspace=.1, wspace=.05)
     ax = ax.ravel()
+    print(len(ax))
     if ALVINN:
         cmap='gray'
     for i in range(num_images):
@@ -147,8 +149,8 @@ def process_image(image):
     # Resize image to reduce processing
     image = cv2.resize(image, (resize_width, resize_height), interpolation=cv2.INTER_AREA)
     if ALVINN:
+        # Pre-process single channel to emphasise road structure
         image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)[:,:,2]
-        #image = cv2.equalizeHist(image)
         image = 255 - image
         '''image_sum = (image[:, :, 0].astype(np.float32) + image[:, :, 1].astype(np.float32)
                      + image[:, :, 2].astype(np.float32))
@@ -180,23 +182,30 @@ def plot_history(train_history):
     plt.show()
 
 def generator(samples, batch_size):
+    # Generates batches of image input and steering output for use with fit_generator()
     X = np.zeros((batch_size, resize_height, resize_width, img_channels),dtype=np.float32)
     y = np.zeros(batch_size, dtype=np.float32)
     np.random.shuffle(samples)
     n_samples = len(samples)
 
     while 1: # Loop forever so the generator never terminates
+        # Generate batch_size number of examples during each function call
         for idx in range(batch_size):
             keep_straight_steer = 0
             while not keep_straight_steer:
+                # Sample random example and read steering angle
                 sample_idx = np.random.randint(n_samples)
                 batch_sample = samples[sample_idx]
                 steer = float(batch_sample[3])
                 if abs(steer)<steer_dev:
+                    # Select steering angle close to zero with probability steer_prob
                     if abs(np.random.uniform())> steer_prob:
                         keep_straight_steer = 1
+            # Choose the image corresponding to the steering angle
             image, y[idx] = select_image(batch_sample)
+            # Pre-process selected image and add to image set
             X[idx] = process_image(image)
+        # Return batch of images and steering angles
         yield sklearn.utils.shuffle(X, y)
 
 def train_model():
@@ -239,6 +248,7 @@ def train_model():
     return train_history
 
 def visualise_network():
+    # Use the functions in visualise.py to display each network layer
     if os.path.isfile(checkpoint_file):
         model = load_model(checkpoint_file)
     idx= np.random.randint(len(samples))
@@ -264,10 +274,10 @@ if __name__ == "__main__":
     # Read training data
     samples = read_data()
     # Display data statistics
-    #analyse_data(samples)
+    analyse_data(samples)
     # Train neural network
-    train_history = train_model()
+    #train_history = train_model()
     # Display network activations
     #visualise_network()
     # Display training performance
-    plot_history(train_history)
+    #plot_history(train_history)

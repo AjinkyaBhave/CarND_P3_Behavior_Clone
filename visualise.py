@@ -1,3 +1,6 @@
+# These functions are directly taken from https://github.com/philipperemy/keras-visualize-activations
+# They display the activations of all model layers for further analysis
+
 def get_activations(model, model_inputs, print_shape_only=False, layer_name=None):
     import keras.backend as K
     print('----- activations -----')

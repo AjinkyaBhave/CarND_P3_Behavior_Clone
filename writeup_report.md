@@ -44,7 +44,7 @@ Using the Udacity provided simulator and my drive.py file, the car can be driven
 ```sh
 python drive.py ./model.h5
 ```
-The video file is placed in *./video/track1.mp4* and shows the performance of the NVIDIA-based network around one lap of Track 1.
+The video file is placed in *./video/track1_nvidia.mp4* and shows the performance of the NVIDIA-based network around one lap of Track 1. The simulator settings are *640x480* resolution with graphics quality set to *Fast*.
 
 ####3. Submission code is usable and readable
 
@@ -90,7 +90,7 @@ The main problem areas were the dirt boundary and the sharp turn towards the end
 
 ![Training Performance][image2]
 
-At the end of the training process, the vehicle is able to drive autonomously around Track 1 for multiple laps without leaving the road. I tested with speeds of  9 mph and 15 mph by changing the setpoint in drive.py, and the performance is similar at both speeds. The final video is placed at *./video/track1.mp4.* 
+At the end of the training process, the vehicle is able to drive autonomously around Track 1 for multiple laps without leaving the road. I tested with speeds of  9 mph and 15 mph by changing the setpoint in drive.py, and the performance is similar at both speeds. The final video is placed at *./video/track1_nvidia.mp4.* 
 
 
 ####2. Final Model Architecture
@@ -125,8 +125,12 @@ Since the idea for this project came from NVIDIA's DAVE2 paper, which itself owe
 
 I have used the same image size (30,32,1), same number of first layer hidden units (4), and activation functions (tanh). Where this network differs from the original is the output layer. ALVINN had 30 output units to differentiate between discrete steering directions, and the output was a gaussian distribution over the correct direction. I ran out of time to implement this since it involved pre-processing the steering training data to make a gaussian vector, and also changing the drive.py file to pre-process the steering from the simulator. 
 
-To make the networks almost the same, I have added another hidden layer of 30 units, and connected that to a final output layer of one neuron. This tries to give this network the same representational power as the original, while keeping the output the same as needed by the Udacity P3 simulator interface. I also tried to use the same pre-processing as Dean did, namely only using the B-channel of the RGB image with normalisation, to get rid of trees and shadows. However, the original network dealt with real camera images with real sun rays. The whole idea behind that approach was that road shadows would contain a significant blue component because of reflection from the sky. In the simulator, however, this approach did not work and led to washed out images, as shown below. I finally used the (inverted) S-channel from the HLS colour space to highlight the drive-able road section. This seemed to help the network learn much better than grayscale or B-channel inputs. 
+To make the networks almost the same, I have added another hidden layer of 30 units, and connected that to a final output layer of one neuron. This tries to give this network the same representational power as the original, while keeping the output the same as needed by the Udacity P3 simulator interface. I also tried to use the same pre-processing as Dean did, namely only using the B-channel of the RGB image with normalisation, to get rid of trees and shadows. This approach did not work and led to washed out images, as shown below. 
 
 ![Blue Channel Image][image6]
 
-I used the same training data to train my ALVINN network, with identical training parameters. After training on the Udacity data, the network learnt to drive straight but was not able to take all the corners successfully. I augmented training by driving only on those portions where the network had difficulty. The final result is saved in *./video/alvinn_track1.mp4*.
+This is because the original network dealt with real camera images with real sun and sky. The whole idea behind that approach was that road shadows would contain a significant blue component because of reflection from the sky. In the simulator, this effect is not present since the shadows are not rendered due to reflected sky rays. I finally used the (inverted) S-channel from the HLS colour space to highlight the drive-able road section. This seemed to help the network learn much better than grayscale or B-channel inputs. The S-channel training images are shown below.
+
+I used the same training data to train my ALVINN network, with identical training parameters. After training on the Udacity data, the network learnt to drive straight but was not able to take all the corners successfully. I augmented training by driving only on those portions where the network had difficulty. The final network is able to successfully navigate the track, except at the end where it comes very close to the road edge. The final result is saved in *./video/track1_alvinn.mp4*. 
+
+Based on my experience training both networks, NVIDIA and ALVINN, I found the NVIDIA network more robust and the driving is also smoother. ALVINN took me some time to train because it would forget the straight driving performance if I tried to help it overcome some small portion of the track that it was getting wrong. In the end, I retrained it on the entire Udacity dataset, with a focus on turns more than straight driving. If I were to design a network for an autonomous car, given today's computing resources, I would choose something like NVIDIA's network over ALVINN, given the ease of training and easy availability of data. However, ALVINN's design, pre-processing tricks, and interpreting output activations, taught me a lot about how to design a good network with minimal computing resources, using sound engineering judgement mixed with a lot of creativity.

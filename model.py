@@ -23,9 +23,9 @@ ALVINN = 0
 # Batch size for generator function in training and validation
 batch_size = 32
 # Number of epochs
-n_epochs = 8
+n_epochs = 2
 # Learning rate
-learn_rate = 0.001
+learn_rate = 0.0001
 # Maximum steering angle in degrees
 steer_max = 25
 steer_min = -25
@@ -36,7 +36,7 @@ steer_dev = 1.0   # Deviation from zero to be considered straight driving
 # Threshold for flipping image horizontally
 flip_prob = 0.5
 # Data directory containing images and control measurements
-data_dir = './dataset/track1/striped_turn/'
+data_dir = './dataset/track1/final/'
 img_dir = data_dir+'IMG/'
 # File to save current best network with weights
 checkpoint_file = './model_checkpoint/model.h5'
@@ -274,10 +274,10 @@ if __name__ == "__main__":
     # Read training data
     samples = read_data()
     # Display data statistics
-    # analyse_data(samples)
+    analyse_data(samples)
     # Train neural network
     train_history = train_model()
     # Display network activations
     #visualise_network()
     # Display training performance
-    # plot_history(train_history)
+    plot_history(train_history)

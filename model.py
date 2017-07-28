@@ -25,7 +25,7 @@ batch_size = 32
 # Number of epochs
 n_epochs = 2
 # Learning rate
-learn_rate = 0.0001
+learn_rate = 0.001
 # Maximum steering angle in degrees
 steer_max = 25
 steer_min = -25
